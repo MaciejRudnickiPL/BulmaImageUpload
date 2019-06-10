@@ -1,0 +1,313 @@
+import Cropper from "cropperjs";
+//potrzebny cropperjs https://fengyuanchen.github.io/cropperjs/
+// oraz bulma - i dialg 
+import HelpJs from './help/helpJS'
+
+let hjs = new HelpJs();
+
+let cropper;
+let bodyDialog;
+let btnCropOk, btnCropCancel, btnCropDel;
+// let cropPreviewImg;
+let file;
+
+// let crop;
+// zdjęcie
+// dodać div z id ustawionym w opcjach btnImageText gdzie będize wstawiona kontrolka
+// myData umożliwia przekaznaie danych dot zdjęcia np. jakiś opis
+// pobranie w controller $myData = json_decode($request->get('mydata'));
+
+
+function CropImage(prefix = 'crap') {
+    this.myOpt = {
+        prefId: 'crop',
+        rout: 'image/image',// rout do jakiego zostanie przesłany obraz i dane
+        title: 'Przycięcie obrazu.',// tytuł okna
+        filename: null,
+        btnImage: {
+            btnImageSrc: 'https://bulma.io/images/placeholders/128x128.png"',// domyslne zdjęcie przycisku
+            btnImageText: 'Dodaj zdjęcie',// text przycisku
+            btnWrapId: 'btnWrapId',//gdzie ma zostac wstawiony button
+        },
+        miniImg: {
+            createMini: false,// czy ma być automatycznie tworzona i przesyłana miniaturka obrazu
+            imgPrefx: 'mini_',// przedrostek miniaturki
+            rout: '',// indywidualny rout dla miniaturki - jeśli brak wykorzystuję główny rout
+            cropOptions: {// opcje croperjs dla miniaturki
+                height: 200,
+                width: 200,
+                aspectRatio: 1,
+            }
+        },
+        cropOptions: {// opcje cropperjs dla zdjęcia
+            height: 900,
+            width: 900,
+            aspectRatio: 1,
+        }
+    };
+    this.myOpt.prefId = prefix;// ustawienie prefixa do id
+    this.cropPreviewImg = '';// div podglądoowy wewnątrz dialogu dla przycinanego zdjęcia
+    this.eleWrapImg = null;// wstawiana kontrolka
+    this.crop = null;// zdjęcie do którego zostanie podstawiny corop
+}
+
+CropImage.prototype.dialog = function () {
+
+    return `<div id="${this.myOpt.prefId}_DialogId" class="modal">
+    <div class="modal-background"></div>
+    <div class="modal-card">
+        <header class="modal-card-head">
+            <p id="${this.myOpt.prefId}_TitleId" class="modal-card-title">${this.myOpt.title}</p>
+            <button id="${this.myOpt.prefId}_delId" class="delete" aria-label="close"></button>
+        </header>
+        <section id="${this.myOpt.prefId}_bodyId" class="modal-card-body">
+            <img src="" id="${this.myOpt.prefId}_imageID" alt="Zdjęcie do przycięcia">
+        </section>
+        <footer class="modal-card-foot">
+            <button id="${this.myOpt.prefId}_btnOkId"  class="button is-success">OK org</button>
+            <button id="${this.myOpt.prefId}_btnCancelId" class="button">Anuluj</button>
+        </footer>
+    </div>
+</div>`;
+
+
+};
+CropImage.prototype.imageButton = function () {
+    return `<div id="${this.myOpt.prefId}_imageUploadId" class="cropWrapp">
+<div class="upload-btn-wrapper">
+    <div class="button" style="width:${this.myOpt.miniImg.cropOptions.width}px">${this.myOpt.btnImage.btnImageText}</div>
+    <input class="helpRed" style="height:${this.myOpt.miniImg.cropOptions.height}px;width:${this.myOpt.miniImg.cropOptions.width}px" type="file" accept="file_extension|,.jpg,.png" name="fileToUpload" id="${this.myOpt.prefId}_btnFileImageId">
+    <div class="cropImagePrevievWrap">
+        <img style="height:${this.myOpt.miniImg.cropOptions.height}px;width:${this.myOpt.miniImg.cropOptions.width}px" id="${this.myOpt.prefId}_surceImageId" src="${this.myOpt.btnImage.btnImageSrc}">
+        <div id="${this.myOpt.prefId}_btnDeleteId" style="position: absolute;top: 8px;right: 8px" class="delete"></div>
+    </div>
+</div>
+</div>
+`;
+};
+
+CropImage.prototype.imageButtonNoDelete = function () {
+
+    return `<div id="${this.myOpt.prefId}_imageUploadId" class="cropWrapp">
+<div class="upload-btn-wrapper">
+    <div class="button" style="width:${this.myOpt.miniImg.cropOptions.width}px">${this.myOpt.btnImage.btnImageText}</div>
+    <input class="helpRed" style="height:${this.myOpt.miniImg.cropOptions.height}px;width:${this.myOpt.miniImg.cropOptions.width}px" type="file" accept="file_extension|,.jpg,.png" name="fileToUpload" id="${this.myOpt.prefId}_btnFileImageId">
+    <div class="cropImagePrevievWrap">
+        <img style="height:${this.myOpt.miniImg.cropOptions.height}px;width:${this.myOpt.miniImg.cropOptions.width}px" id="${this.myOpt.prefId}_surceImageId" src="${this.myOpt.btnImage.btnImageSrc}">
+    </div>
+</div>
+</div>
+`;
+};
+CropImage.prototype.setUploadImage = function (btn, wrapID = null) {
+// wstawia przycisk w podany w myOptions id
+    if (hjs.isEmpty(wrapID)) {
+        this.eleWrapImg = document.getElementById(this.myOpt.btnImage.btnWrapId);
+    } else {
+        this.eleWrapImg = document.getElementById(wrapID);
+    }
+    this.eleWrapImg.insertAdjacentHTML('beforeend', btn);
+
+    let btnDelete = document.getElementById(this.myOpt.prefId + '_btnDeleteId');
+    if (btnDelete) {
+        btnDelete.addEventListener('click', this.deleteImage.bind(this), false);
+    }
+
+};
+
+CropImage.prototype.deleteImage = function () {
+    let eleUploadImage = document.getElementById(this.myOpt.prefId + '_imageUploadId');
+    eleUploadImage.remove();
+
+    this.cropDialog.remove();
+    const event = new CustomEvent('imageCropDelete', {
+        detail: {prefix: this.myOpt.prefId},
+        bubbles: true, //idąc w góre dokumentu, event będzie odpalany dla elementów (jeżeli mają nasłuch)
+        cancelable: false //czy można przerwać za pomocą e.stopPropagation()
+    });
+
+    document.dispatchEvent(event);
+};
+
+
+CropImage.prototype.name = function () {
+    hjs.info('CropImage');
+};
+CropImage.prototype.getCrop = function () {
+    return this.crop;
+};
+CropImage.prototype.getCropper = function () {
+    return cropper;
+};
+CropImage.prototype.getElements = function () {
+
+    this.cropDialog = document.getElementById(this.myOpt.prefId + '_DialogId');
+    btnCropOk = document.getElementById(this.myOpt.prefId + '_btnOkId');
+    btnCropCancel = document.getElementById(this.myOpt.prefId + '_btnCancelId');
+    btnCropDel = document.getElementById(this.myOpt.prefId + '_delId');
+    this.cropPreviewImg = document.getElementById(this.myOpt.prefId + '_imageID');// wewnętrzny plik dialog
+    bodyDialog = document.getElementById(this.myOpt.prefId + '_bodyId');// body dialog
+
+    this.btnChoiceFileImage = document.getElementById(this.myOpt.prefId + '_btnFileImageId');
+    this.crop = document.getElementById(this.myOpt.prefId + '_surceImageId');
+};
+CropImage.prototype.showCropDailog = function (onOf) {
+    //wyświetlanie lub ukrywanie dialogu
+
+    switch (onOf) {
+        case true:
+            this.cropDialog.classList.add('is-active');
+            break;
+        case false:
+            this.cropDialog.classList.remove('is-active');
+            break;
+    }
+};
+CropImage.prototype.addDialogListeners = function () {
+    //dodawnia nasuchiwnaia
+    btnCropCancel.addEventListener('click', this.dialogCancel.bind(this), false);
+    btnCropOk.addEventListener('click', this.dialogOK.bind(this), false);
+    btnCropDel.addEventListener('click', this.dialogCancel.bind(this), false);
+};
+CropImage.prototype.removeListeners = function () {
+    //dodawnia nasuchiwnaia
+    btnCropCancel.removeEventListener('click', this.dialogCancel.bind(this), false);
+    btnCropOk.removeEventListener('click', this.dialogOK.bind(this), false);
+    btnCropDel.removeEventListener('click', this.dialogCancel.bind(this), false);
+};
+CropImage.prototype.preview = function () {
+    // generowanie cropera i wstawianie do dialogBoxu
+    file = this.btnChoiceFileImage.files[0];
+    let prev = this.cropPreviewImg;
+    let cropOpt = this.myOpt.cropOptions;
+    console.log(this.myOpt);
+    let reader = new FileReader();
+    reader.addEventListener('load', function (event) {
+        prev.src = reader.result;
+    }, false);
+    if (file) {
+        reader.readAsDataURL(file)
+    }
+    prev.addEventListener('load', function (event) {
+        if (cropper) {
+            cropper.destroy();
+        }
+
+        cropper = new Cropper(prev, cropOpt);
+    });
+};
+CropImage.prototype.dialogOK = function () {
+    //wykonywane po ok w dialogBox
+    this.crop.src = cropper.getCroppedCanvas(this.myOpt.miniImg.cropOptions).toDataURL();
+    this.uploadImage();
+
+    if (this.myOpt.miniImg.createMini) {
+        this.uploadMiniImage();
+    }
+    this.showCropDailog(false);
+};
+CropImage.prototype.dialogCancel = function () {
+    //wykonywane po cancel w dialogBox
+    this.showCropDailog(false);
+    this.removeListeners();
+};
+CropImage.prototype.croping = function () {
+    this.checkFileName();
+    this.showCropDailog(true);
+    this.preview();
+};
+CropImage.prototype.startCroping = function () {
+
+    // let temp = this.btnChoiceFileImage;
+    this.btnChoiceFileImage.addEventListener('change', this.croping.bind(this), false);
+};
+CropImage.prototype.uploadImage = function () {
+    //przesyłanie ubrazku ajaxem na wybrany rout
+    // dodatkowe dane w opt.myData
+
+    if (cropper) {
+        cropper.getCroppedCanvas(this.myOpt.cropOptions).toBlob((blob) => {
+            const formData = new FormData();
+            let filename = this.myOpt.fileName;
+            let prefId = this.myOpt.prefId;
+            formData.append('croppedImage', blob);
+            formData.append('fileName', filename);
+            formData.append('mydata', JSON.stringify(this.myOpt.myData));
+
+            if (hjs.isEmpty(this.myOpt.rout)) {
+                hjs.info('Pusty rout!');
+            } else {
+                $.ajax(this.myOpt.rout, {
+                    method: "POST",
+                    data: formData,
+                    processData: false,
+                    contentType: false,
+                    success() {
+                        hjs.info('Upload success info js');
+
+                        const event = new CustomEvent('imageUpload', {
+                            detail: {fileName: filename, prefix: [prefId]},
+                            bubbles: true, //idąc w góre dokumentu, event będzie odpalany dla elementów (jeżeli mają nasłuch)
+                            cancelable: false //czy można przerwać za pomocą e.stopPropagation()
+                        });
+                        document.dispatchEvent(event);
+                    },
+                    error() {
+                        hjs.info('Upload error');
+                    },
+                }).done(function () {
+                    hjs.info('upload normal: ' + filename);
+                });
+            }
+        });
+    }
+};
+CropImage.prototype.uploadMiniImage = function () {
+    //przesyłanie ubrazku ajaxem na wybrany rout
+    // dodatkowe dane w opt.myData
+    if (cropper) {
+        cropper.getCroppedCanvas(this.myOpt.miniImg.cropOptions).toBlob((blob) => {
+            let fileName = this.myOpt.miniImg.imgPrefx + this.myOpt.fileName;
+            const formData = new FormData();
+
+            formData.append('croppedImage', blob);
+            formData.append('fileName', fileName);
+            formData.append('mydata', JSON.stringify(this.myOpt.myData));
+            if (hjs.isEmpty(this.myOpt.miniImg.rout)) {
+                this.myOpt.miniImg.rout = this.myOpt.rout;
+            }
+
+
+            $.ajax(this.myOpt.miniImg.rout, {
+                method: "POST",
+                data: formData,
+                processData: false,
+                contentType: false,
+                success() {
+                    hjs.info('Upload success info js');
+                },
+                error() {
+                    hjs.info('Upload error');
+                },
+            }).done(function () {
+                hjs.info('upload mini :' + fileName);
+            });
+        });
+    }
+};
+CropImage.prototype.checkFileName = function () {
+    if (hjs.isEmpty(this.myOpt.fileName)) {
+        this.myOpt.fileName = hjs.getRendomName('img') + '.jpg';
+    }
+};
+CropImage.prototype.setMyData = function (myData) {
+    //przesyłanie dodatkowych danych
+    // odbiór w kontrolerze po przez $myData = json_decode($request->get('mydata'));$myData->elObjektu
+    this.myOpt.myData = myData;
+};
+CropImage.prototype.setDialogBox = function (dialog) {
+    document.body.insertAdjacentHTML('beforeend', dialog);
+    this.getElements();
+    this.addDialogListeners();
+};
+export default CropImage;
