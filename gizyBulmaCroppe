@@ -1,6 +1,7 @@
-import Cropper from "cropperjs";
 //potrzebny cropperjs https://fengyuanchen.github.io/cropperjs/
 // oraz bulma - i dialg 
+
+import Cropper from "cropperjs";
 import HelpJs from './help/helpJS'
 
 let hjs = new HelpJs();
@@ -14,9 +15,9 @@ let file;
 // let crop;
 // zdjęcie
 // dodać div z id ustawionym w opcjach btnImageText gdzie będize wstawiona kontrolka
-// myData umożliwia przekaznaie danych dot zdjęcia np. jakiś opis
+// myData umozliwia przekaznaie danych dot zdjęcia np. jakiś opis
 // pobranie w controller $myData = json_decode($request->get('mydata'));
-
+// todo: Usówanie przesłanego pliku grafincznego
 
 function CropImage(prefix = 'crap') {
     this.myOpt = {
@@ -25,9 +26,10 @@ function CropImage(prefix = 'crap') {
         title: 'Przycięcie obrazu.',// tytuł okna
         filename: null,
         btnImage: {
-            btnImageSrc: 'https://bulma.io/images/placeholders/128x128.png"',// domyslne zdjęcie przycisku
+            btnImageSrc: null,// domyslne zdjęcie przycisku '/public_html/img/creator/img868889.jpg' ,//
             btnImageText: 'Dodaj zdjęcie',// text przycisku
-            btnWrapId: 'btnWrapId',//gdzie ma zostac wstawiony button
+            btnWrapId: 'btnWrapId',//gdzie ma zostac wstawiony button,
+            btnImageEmptySrc: 'https://bulma.io/images/placeholders/128x128.png'
         },
         miniImg: {
             createMini: false,// czy ma być automatycznie tworzona i przesyłana miniaturka obrazu
@@ -49,7 +51,17 @@ function CropImage(prefix = 'crap') {
     this.cropPreviewImg = '';// div podglądoowy wewnątrz dialogu dla przycinanego zdjęcia
     this.eleWrapImg = null;// wstawiana kontrolka
     this.crop = null;// zdjęcie do którego zostanie podstawiny corop
+    this.fileToDelete = null;
 }
+
+CropImage.prototype.getBtnImageSrc = function () {
+
+    if (hjs.isEmpty(this.myOpt.btnImage.btnImageSrc)) {
+        return this.myOpt.btnImage.btnImageEmptySrc;
+    }
+
+    return this.myOpt.btnImage.btnImageSrc;
+};
 
 CropImage.prototype.dialog = function () {
 
@@ -74,11 +86,11 @@ CropImage.prototype.dialog = function () {
 };
 CropImage.prototype.imageButton = function () {
     return `<div id="${this.myOpt.prefId}_imageUploadId" class="cropWrapp">
-<div class="upload-btn-wrapper">
+<div class="upload-btn-wrapper ">
     <div class="button" style="width:${this.myOpt.miniImg.cropOptions.width}px">${this.myOpt.btnImage.btnImageText}</div>
     <input class="helpRed" style="height:${this.myOpt.miniImg.cropOptions.height}px;width:${this.myOpt.miniImg.cropOptions.width}px" type="file" accept="file_extension|,.jpg,.png" name="fileToUpload" id="${this.myOpt.prefId}_btnFileImageId">
     <div class="cropImagePrevievWrap">
-        <img style="height:${this.myOpt.miniImg.cropOptions.height}px;width:${this.myOpt.miniImg.cropOptions.width}px" id="${this.myOpt.prefId}_surceImageId" src="${this.myOpt.btnImage.btnImageSrc}">
+        <img style="height:${this.myOpt.miniImg.cropOptions.height}px;width:${this.myOpt.miniImg.cropOptions.width}px" id="${this.myOpt.prefId}_surceImageId" src="${this.getBtnImageSrc()}">
         <div id="${this.myOpt.prefId}_btnDeleteId" style="position: absolute;top: 8px;right: 8px" class="delete"></div>
     </div>
 </div>
@@ -93,7 +105,7 @@ CropImage.prototype.imageButtonNoDelete = function () {
     <div class="button" style="width:${this.myOpt.miniImg.cropOptions.width}px">${this.myOpt.btnImage.btnImageText}</div>
     <input class="helpRed" style="height:${this.myOpt.miniImg.cropOptions.height}px;width:${this.myOpt.miniImg.cropOptions.width}px" type="file" accept="file_extension|,.jpg,.png" name="fileToUpload" id="${this.myOpt.prefId}_btnFileImageId">
     <div class="cropImagePrevievWrap">
-        <img style="height:${this.myOpt.miniImg.cropOptions.height}px;width:${this.myOpt.miniImg.cropOptions.width}px" id="${this.myOpt.prefId}_surceImageId" src="${this.myOpt.btnImage.btnImageSrc}">
+        <img style="height:${this.myOpt.miniImg.cropOptions.height}px;width:${this.myOpt.miniImg.cropOptions.width}px" id="${this.myOpt.prefId}_surceImageId" src="${this.getBtnImageSrc()}">
     </div>
 </div>
 </div>
@@ -107,6 +119,14 @@ CropImage.prototype.setUploadImage = function (btn, wrapID = null) {
         this.eleWrapImg = document.getElementById(wrapID);
     }
     this.eleWrapImg.insertAdjacentHTML('beforeend', btn);
+
+    const event = new CustomEvent('imageAfterInsert', {
+        detail: {prefix: this.myOpt.prefId},
+        bubbles: true, //idąc w góre dokumentu, event będzie odpalany dla elementów (jeżeli mają nasłuch)
+        cancelable: false //czy można przerwać za pomocą e.stopPropagation()
+    });
+
+    this.eleWrapImg.dispatchEvent(event);
 
     let btnDelete = document.getElementById(this.myOpt.prefId + '_btnDeleteId');
     if (btnDelete) {
@@ -126,7 +146,7 @@ CropImage.prototype.deleteImage = function () {
         cancelable: false //czy można przerwać za pomocą e.stopPropagation()
     });
 
-    document.dispatchEvent(event);
+    this.eleWrapImg.dispatchEvent(event);
 };
 
 
@@ -198,7 +218,7 @@ CropImage.prototype.preview = function () {
 };
 CropImage.prototype.dialogOK = function () {
     //wykonywane po ok w dialogBox
-    this.crop.src = cropper.getCroppedCanvas(this.myOpt.miniImg.cropOptions).toDataURL();
+    this.crop.src = cropper.getCroppedCanvas(this.myOpt.miniImg.cropOptions).toDataURL('image/jpeg', 0.9);
     this.uploadImage();
 
     if (this.myOpt.miniImg.createMini) {
@@ -225,6 +245,7 @@ CropImage.prototype.uploadImage = function () {
     //przesyłanie ubrazku ajaxem na wybrany rout
     // dodatkowe dane w opt.myData
 
+    let self = this;
     if (cropper) {
         cropper.getCroppedCanvas(this.myOpt.cropOptions).toBlob((blob) => {
             const formData = new FormData();
@@ -250,7 +271,7 @@ CropImage.prototype.uploadImage = function () {
                             bubbles: true, //idąc w góre dokumentu, event będzie odpalany dla elementów (jeżeli mają nasłuch)
                             cancelable: false //czy można przerwać za pomocą e.stopPropagation()
                         });
-                        document.dispatchEvent(event);
+                        self.eleWrapImg.dispatchEvent(event);
                     },
                     error() {
                         hjs.info('Upload error');
@@ -262,6 +283,8 @@ CropImage.prototype.uploadImage = function () {
         });
     }
 };
+
+
 CropImage.prototype.uploadMiniImage = function () {
     //przesyłanie ubrazku ajaxem na wybrany rout
     // dodatkowe dane w opt.myData
