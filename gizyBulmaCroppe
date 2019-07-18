@@ -1,6 +1,3 @@
-//potrzebny cropperjs https://fengyuanchen.github.io/cropperjs/
-// oraz bulma - i dialg 
-
 import Cropper from "cropperjs";
 import HelpJs from './help/helpJS'
 
